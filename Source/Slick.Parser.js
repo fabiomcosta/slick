@@ -121,20 +121,23 @@ function parser(
 		if (separator) return '';
 	}
 	
+	var currentSeparator = parsed.expressions[separatorIndex];
+	
 	if (combinator || combinatorChildren || combinatorIndex === -1){
 		combinator = combinator || ' ';
-		var currentSeparator = parsed.expressions[separatorIndex];
 		if (reversed && currentSeparator[combinatorIndex])
 			currentSeparator[combinatorIndex].reverseCombinator = reverseCombinator(combinator);
 		currentSeparator[++combinatorIndex] = {combinator: combinator, tag: '*'};
 	}
 	
-	var currentParsed = parsed.expressions[separatorIndex][combinatorIndex];
+	var currentParsed = currentSeparator[combinatorIndex];
 
 	if (tagName){
+		if (!('tag' in currentSeparator)) currentSeparator.tag = combinatorIndex;
 		currentParsed.tag = tagName.replace(reUnescape, '');
 
 	} else if (id){
+		if (!('id' in currentSeparator)) currentSeparator.id = combinatorIndex;
 		currentParsed.id = id.replace(reUnescape, '');
 
 	} else if (className){
