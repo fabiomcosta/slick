@@ -33,10 +33,9 @@ var parse = function(expression, isReversed){
 };
 
 var reverseCombinator = function(combinator){
-	if (combinator === '!') return ' ';
-	else if (combinator === ' ') return '!';
-	else if ((/^!/).test(combinator)) return combinator.replace(/^!/, '');
-	else return '!' + combinator;
+	return	(combinator === '!') ? ' ' :
+			(combinator === ' ') ? '!' :
+			(combinator.charAt(0) === '!') ? combinator.substring(1) : '!' + combinator;
 };
 
 var reverse = function(expression){
