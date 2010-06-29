@@ -25,7 +25,6 @@ local.isXML = function(document){
 local.setDocument = function(document){
 	
 	// convert elements / window arguments to document. if document cannot be extrapolated, the function returns.
-	
 	if (document.nodeType === 9); // document
 	else if (document.ownerDocument) document = document.ownerDocument; // node
 	else if (document.navigator) document = document.document; // window
@@ -202,7 +201,7 @@ local.search = function(context, expression, append, first){
 		return found;
 	} else if (expression.Slick){ // expression is a parsed Slick object
 		parsed = expression;
-	} else if (this.contains(context.documentElement || context, expression)){ // expression is a node
+	} else if (expression.nodeType === 1){ // expression is a node
 		(found) ? found.push(expression) : found = expression;
 		return found;
 	} else { // other junk
@@ -220,7 +219,6 @@ local.search = function(context, expression, append, first){
 	
 	/*</nth-pseudo-selectors>*//*</pseudo-selectors>*/
 	
-	// should sort if there are nodes in append and if you pass multiple expressions.
 	// should remove duplicates if append already has items
 	var shouldUniques = !!(append && append.length);
 	
@@ -234,50 +232,134 @@ local.search = function(context, expression, append, first){
 	
 	// default engine
 	
-	var j, m, n;
+	var j, m, n, z;
 	var combinator, tag, id, classList, classes, attributes, pseudos;
-	var currentItems, currentExpression, currentBit, lastBit, expressions = parsed.expressions;
+	var item, copyItems, currentItems, currentExpression, currentBit, lastBit, expressions = parsed.expressions;
 	
-	search: for (i = 0; (currentExpression = expressions[i]); i++) for (j = 0; (currentBit = currentExpression[j]); j++){
+	search: for (i = 0, j = 0; (currentExpression = expressions[i]); i++){
+		
+		currentItems = [context];
+		
+		bottomUp: {
+			z = currentExpression.id;
+			if (z && !local.isXMLDocument){
+				
+				// BY ID
+				item = this.getById(this.document, currentExpression[z].id);
+				if (!item){
+					if (item === false) break bottomUp;
+					else return (first) ? null : found;
+				} else {
+					currentItems = [item];
+				}
+				
+				// TODO BY TAG
+				
+				
+				// TODO, should be able to clone a HTMLCollection too
+				copyItems = currentItems.slice(0);
 
-		combinator = 'combinator:' + currentBit.combinator;
-		if (!this[combinator]) continue search;
-		
-		tag        = (this.isXMLDocument) ? currentBit.tag : currentBit.tag.toUpperCase();
-		id         = currentBit.id;
-		classList  = currentBit.classList;
-		classes    = currentBit.classes;
-		attributes = currentBit.attributes;
-		pseudos    = currentBit.pseudos;
-		lastBit    = (j === (currentExpression.length - 1));
-	
-		this.bitUniques = {};
-		
-		if (lastBit){
-			this.uniques = uniques;
-			this.found = found;
-		} else {
-			this.uniques = {};
-			this.found = [];
+				j = z + 1;
+				
+				for (; --z >= 0;){
+					currentBit = currentExpression[z];
+					this['reverse:' + currentExpression[z+1].combinator](
+						context,
+						currentItems,
+						copyItems,
+						(this.isXMLDocument) ? currentBit.tag : currentBit.tag.toUpperCase(),
+						currentBit.id,
+						currentBit.classes,
+						currentBit.attributes,
+						currentBit.pseudos,
+						currentBit.classList
+					);
+				}
+				
+				// first combinator and the context
+				this['reverse:' + currentExpression[0].combinator](context, currentItems, false);
+			}
 		}
+		
+		for (; (currentBit = currentExpression[j]); j++){
+			
+			combinator = 'combinator:' + currentBit.combinator;
+			
+			// FIXME, or throw an error or remove this
+			// if (!this[combinator]) continue search;
 
-		if (j === 0){
-			this[combinator](context, tag, id, classes, attributes, pseudos, classList);
-			if (first && lastBit && found.length) break search;
-		} else {
-			if (first && lastBit) for (m = 0, n = currentItems.length; m < n; m++){
+			tag        = (this.isXMLDocument) ? currentBit.tag : currentBit.tag.toUpperCase();
+			id         = currentBit.id;
+			classList  = currentBit.classList;
+			classes    = currentBit.classes;
+			attributes = currentBit.attributes;
+			pseudos    = currentBit.pseudos;
+			lastBit    = (j === (currentExpression.length - 1));
+
+			this.bitUniques = {};
+
+			if (lastBit){
+				this.uniques = uniques;
+				this.found = found;
+			} else {
+				this.uniques = {};
+				this.found = [];
+			}
+
+			for (m = 0, n = currentItems.length; m < n; m++){
 				this[combinator](currentItems[m], tag, id, classes, attributes, pseudos, classList);
-				if (found.length) break search;
-			} else for (m = 0, n = currentItems.length; m < n; m++) this[combinator](currentItems[m], tag, id, classes, attributes, pseudos, classList);
+				if (first && lastBit && found.length) break search;
+			}
+
+			currentItems = this.found;
 		}
-		
-		currentItems = this.found;
 	}
 	
-	if (shouldUniques || (parsed.expressions.length > 1)) this.sort(found);
+	// should sort if there are nodes in append and if you pass multiple expressions.
+	if (shouldUniques || (expressions.length > 1)) this.sort(found);
 	
 	return (first) ? (found[0] || null) : found;
 };
+
+
+
+var reverse = {
+	
+	' ': function(context, currentItems, copyItems, tag, id, classes, attributes, pseudos){
+		for (var parent, m = 0; (parent = copyItems[m]); m++){
+			parent = parent.parentNode;
+			do {
+				if (!parent || parent === context){
+					copyItems.splice(m, 1);
+					currentItems.splice(m, 1);
+					m--;
+					break;
+				}
+				if (this.matchSelector(parent, tag, id, classes, attributes, pseudos)){
+					copyItems[m] = parent;
+					break;
+				}
+			} while ((parent = parent.parentNode));
+		}
+	},
+	
+	'>': function(context, currentItems, copyItems, tag, id, classes, attributes, pseudos){
+		for (var parent, m = 0; (parent = copyItems[m]); m++){
+			parent = parent.parentNode;
+			if (!parent || parent === context || !this.matchSelector(parent, tag, id, classes, attributes, pseudos)){
+				copyItems.splice(m, 1);
+				currentItems.splice(m, 1);
+				m--;
+			} else {
+				copyItems[m] = parent;
+			}
+		}
+	}
+	
+};
+
+for (var r in reverse) local['reverse:' + r] = reverse[r];
+
 
 // Utils
 
@@ -425,6 +507,27 @@ local.matchSelector = function(node, tag, id, classes, attributes, pseudos){
 	return true;
 };
 
+local.getById = function(node, id){
+	var item = this.document.getElementById(id);
+	if ((!item && node.all) || (this.idGetsName && item && item.getAttributeNode('id').nodeValue != id)){
+		// all[id] returns all the elements with that name or id inside node
+		// if theres just one it will return the element, else it will be a collection
+		var children = node.all[id];
+		if (!children) return;
+		if (!children[0]) children = [children];
+		for (i = 0; item = children[i++];) if (item.getAttributeNode('id').nodeValue == id){
+			return item;
+		} 
+		return;
+	}
+	if (!item){
+		// if the context is in the dom we return, else we will try GEBTN, breaking the getById label
+		if (this.contains(this.document.documentElement, node)) return;
+		else return false;
+	} else if (this.document !== node && !this.contains(node, item)) return;
+	return item;
+};
+
 var combinators = {
 
 	' ': function(node, tag, id, classes, attributes, pseudos, classList){ // all child nodes, any level
@@ -432,27 +535,10 @@ var combinators = {
 		var i, item, children;
 
 		if (!this.isXMLDocument){
-			getById: if (id){
-				item = this.document.getElementById(id);
-				if ((!item && node.all) || (this.idGetsName && item && item.getAttributeNode('id').nodeValue != id)){
-					// all[id] returns all the elements with that name or id inside node
-					// if theres just one it will return the element, else it will be a collection
-					children = node.all[id];
-					if (!children) return;
-					if (!children[0]) children = [children];
-					for (i = 0; item = children[i++];) if (item.getAttributeNode('id').nodeValue == id){
-						this.push(item, tag, null, classes, attributes, pseudos);
-						break;
-					} 
-					return;
-				}
-				if (!item){
-					// if the context is in the dom we return, else we will try GEBTN, breaking the getById label
-					if (this.contains(this.document.documentElement, node)) return;
-					else break getById;
-				} else if (this.document !== node && !this.contains(node, item)) return;
-				this.push(item, tag, null, classes, attributes, pseudos);
-				return;
+			if (id){
+				item = this.getById(node, id);
+				if (item) this.push(item, tag, null, classes, attributes, pseudos);
+				if (item || item == null) return;
 			}
 			getByClass: if (classes && node.getElementsByClassName && !this.brokenGEBCN){
 				children = node.getElementsByClassName(classList.join(' '));

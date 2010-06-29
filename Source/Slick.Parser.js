@@ -133,7 +133,7 @@ function parser(
 	var currentParsed = currentSeparator[combinatorIndex];
 
 	if (tagName){
-		if (!('tag' in currentSeparator)) currentSeparator.tag = combinatorIndex;
+		if (!('tag' in currentSeparator) && tagName != '*') currentSeparator.tag = combinatorIndex;
 		currentParsed.tag = tagName.replace(reUnescape, '');
 
 	} else if (id){
